@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CardService.Api/CardService.Api.csproj" />
+    <Project Path="src/CardService.Application/CardService.Application.csproj" />
+    <Project Path="src/CardService.Domain/CardService.Domain.csproj" />
+    <Project Path="src/CardService.Infrastructure/CardService.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CardService.Api.Tests/CardService.Api.Tests.csproj" />
+    <Project Path="tests/CardService.Domain.Tests/CardService.Domain.Tests.csproj" />
+    <Project Path="tests/CardService.Infrastructure.Tests/CardService.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

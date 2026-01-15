@@ -1,0 +1,226 @@
+openapi: 3.0.3
+info:
+  title: Card Service API
+  version: 1.0.0
+  description: >
+    API for storing cards and purchase transactions, and retrieving converted purchases and balances
+    using U.S. Treasury Reporting Rates of Exchange.
+servers:
+  - url: http://localhost:5000
+paths:
+  /cards:
+    post:
+      summary: Create a card
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCardRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCardResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cards/{cardId}/purchases:
+    post:
+      summary: Create a purchase transaction for a card
+      parameters:
+        - in: path
+          name: cardId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePurchaseRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePurchaseResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /cards/{cardId}/purchases/{purchaseId}:
+    get:
+      summary: Retrieve a purchase converted to the specified currency
+      parameters:
+        - in: path
+          name: cardId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: purchaseId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: currencyKey
+          required: true
+          schema: { type: string }
+          description: Treasury country_currency_desc (e.g., Australia-Dollar)
+      responses:
+        '200':
+          description: Purchase returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConvertedPurchaseResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /cards/{cardId}/balance:
+    get:
+      summary: Retrieve available balance (optionally converted)
+      parameters:
+        - in: path
+          name: cardId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: currencyKey
+          required: false
+          schema: { type: string }
+          description: Treasury country_currency_desc (e.g., Austria-Euro)
+        - in: query
+          name: asOfDate
+          required: false
+          schema: { type: string, format: date }
+          description: Anchor date for conversion; defaults to current UTC date
+      responses:
+        '200':
+          description: Balance returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Conflict:
+      description: Conflict / duplicate
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    UnprocessableEntity:
+      description: Conversion unavailable
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ServiceUnavailable:
+      description: Upstream unavailable
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+  schemas:
+    CreateCardRequest:
+      type: object
+      required: [cardNumber, creditLimitUsd]
+      properties:
+        cardNumber:
+          type: string
+          example: "4111111111111111"
+          description: 16-digit numeric string
+        creditLimitUsd:
+          type: number
+          format: double
+          example: 1000.00
+    CreateCardResponse:
+      type: object
+      required: [cardId]
+      properties:
+        cardId:
+          type: string
+          format: uuid
+    CreatePurchaseRequest:
+      type: object
+      required: [description, transactionDate, amountUsd]
+      properties:
+        description:
+          type: string
+          maxLength: 50
+        transactionDate:
+          type: string
+          format: date
+        amountUsd:
+          type: number
+          format: double
+    CreatePurchaseResponse:
+      type: object
+      required: [purchaseId]
+      properties:
+        purchaseId:
+          type: string
+          format: uuid
+    ConvertedPurchaseResponse:
+      type: object
+      required: [purchaseId, description, transactionDate, amountUsd, currencyKey, exchangeRate, rateDate, convertedAmount]
+      properties:
+        purchaseId: { type: string, format: uuid }
+        description: { type: string }
+        transactionDate: { type: string, format: date }
+        amountUsd: { type: number, format: double }
+        currencyKey: { type: string }
+        exchangeRate: { type: number, format: double }
+        rateDate: { type: string, format: date }
+        convertedAmount: { type: number, format: double }
+    BalanceResponse:
+      type: object
+      required: [cardId, creditLimitUsd, totalPurchasesUsd, availableBalanceUsd]
+      properties:
+        cardId: { type: string, format: uuid }
+        creditLimitUsd: { type: number, format: double }
+        totalPurchasesUsd: { type: number, format: double }
+        availableBalanceUsd: { type: number, format: double }
+        currencyKey: { type: string, nullable: true }
+        exchangeRate: { type: number, format: double, nullable: true }
+        rateDate: { type: string, format: date, nullable: true }
+        convertedAvailableBalance: { type: number, format: double, nullable: true }
+        asOfDate: { type: string, format: date, nullable: true }
+    ProblemDetails:
+      type: object
+      properties:
+        type: { type: string, nullable: true }
+        title: { type: string, nullable: true }
+        status: { type: integer, nullable: true }
+        detail: { type: string, nullable: true }
+        instance: { type: string, nullable: true }
+        code: { type: string, nullable: true }
