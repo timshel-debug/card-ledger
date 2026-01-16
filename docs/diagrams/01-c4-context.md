@@ -4,7 +4,7 @@
 High-level view showing CardService in its environment with external actors and systems.
 
 ## Assumptions
-- Client applications (mobile/web) interact via HTTP/REST
+- Client applications (mobile/web) interact via HTTPS/REST
 - Treasury Reporting Rates of Exchange API is the authoritative FX data source
 - SQLite is used for persistence (file-based, no external DB server)
 

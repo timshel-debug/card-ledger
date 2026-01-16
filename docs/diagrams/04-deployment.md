@@ -19,7 +19,7 @@ graph TB
         treasury["U.S. Treasury<br/>Fiscal Data API<br/>(fiscaldata.treasury.gov)"]
     end
     
-    client["Browser/Postman<br/>http://localhost:5000"] -->|HTTP| dotnet
+    client["Browser/Postman<br/>https://localhost:7213"] -->|HTTPS| dotnet
     dotnet -->|HTTPS| treasury
     
     style dotnet fill:#5394fd
@@ -52,34 +52,46 @@ graph TB
         treasury["U.S. Treasury<br/>Fiscal Data API"]
     end
     
-    client["Client Apps"] -->|HTTPS<br/>Port 443| api
+    lb["Edge Load Balancer /<br/>Ingress Controller"]
+    client["Client Apps"]
+    
+    client -->|HTTPS<br/>Port 443| lb
+    lb -->|HTTPS re-encrypt<br/>or mTLS| api
     api -->|HTTPS| treasury
     
-    env["Environment Variables<br/>- DB__ConnectionString<br/>- FX__BaseUrl<br/>- FX__TimeoutSeconds<br/>- FX__RetryCount<br/>- FX__CircuitBreakerFailures<br/>- FX__CircuitBreakerDurationSeconds<br/>- CARD__HashSalt"] -.->|Config| api
+    env["Environment Variables<br/>- DB__ConnectionString<br/>- FX__BaseUrl<br/>- FX__TimeoutSeconds<br/>- FX__RetryCount<br/>- FX__CircuitBreakerFailures<br/>- FX__CircuitBreakerDurationSeconds<br/>- CARD__HashSalt (REQUIRED)"] -.->|Config| api
     
     style api fill:#5394fd
     style volume fill:#777
     style treasury fill:#999
     style env fill:#ffd
+    style lb fill:#FFD700
 ```
 
 **Container Configuration:**
 - **Volume Mount**: `/app/data` for SQLite persistence
-- **Port Mapping**: 8080 (container) → 443 (host with TLS termination at ingress)
-- **Environment Variables**:
+- **Port Mapping**: 8080 (container) exposed for HTTPS (TLS configured in app) OR 443 with TLS termination at ingress + re-encrypt
+- **Transport Security**: Edge load balancer/ingress MUST either:
+  1. Re-encrypt traffic to application (TLS end-to-end), OR
+  2. Use mTLS for internal hop
+  - **No plaintext HTTP between edge and application in Production**
+- **Environment Variables** (REQUIRED in Production):
   - `DB__ConnectionString=Data Source=/app/data/cardservice.db`
   - `FX__BaseUrl=https://api.fiscaldata.treasury.gov`
   - `FX__TimeoutSeconds=2`
   - `FX__RetryCount=2`
   - `FX__CircuitBreakerFailures=5`
   - `FX__CircuitBreakerDurationSeconds=30`
-  - `CARD__HashSalt=<secure-random-value>`
+  - `CARD__HashSalt=<secure-random-value>` **(REQUIRED - app will fail at startup if missing)**
 
 ## Configuration Sources
 
-### Required Settings
-- **DB__ConnectionString**: SQLite file path (auto-creates if missing)
-- **CARD__HashSalt**: Salt for card number hashing (required in production for security)
+### Required Settings (Production Enforcement)
+- **CARD__HashSalt**: Salt for card number hashing
+  - **REQUIRED in Production** — Application fails at startup if missing or blank
+  - Generate using: `openssl rand -hex 64` or equivalent cryptographically secure method
+  - Store in secure configuration management (environment variables, secret manager, etc.)
+- **DB__ConnectionString**: SQLite file path (optional, defaults to `Data Source=App_Data/app.db`)
 
 ### Optional Settings (with defaults)
 - **FX__BaseUrl**: Treasury API base URL (default: `https://api.fiscaldata.treasury.gov`)

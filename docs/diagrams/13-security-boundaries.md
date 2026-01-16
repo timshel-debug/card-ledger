@@ -11,8 +11,8 @@ flowchart TB
         Client[Client Applications]
     end
     
-    subgraph "Trust Boundary (TLS Termination)"
-        LB[Load Balancer<br/>HTTPS → HTTP]
+    subgraph "Trust Boundary (Edge/Gateway)"
+        LB[Load Balancer / <br/> Reverse Proxy]
     end
     
     subgraph "Application Trust Zone"
@@ -35,8 +35,8 @@ flowchart TB
         Treasury[U.S. Treasury API<br/>Public Data]
     end
     
-    Client -->|HTTPS| LB
-    LB -->|HTTP| API
+    Client -->|HTTPS TLS 1.2+| LB
+    LB -->|HTTPS | API
     API -->|Validated Requests| AppLayer
     AppLayer -->|Hash CardNumber| Hashing
     AppLayer -->|Log Events| Redaction
@@ -213,12 +213,13 @@ public static class LogRedactor
 
 ## Transport Security
 
-### TLS Requirements
+### TLS End-to-End Requirement (Default)
+
+**Policy:** All network communication MUST be encrypted in transit. TLS 1.2 or higher is required for all hops.
 
 ```mermaid
 flowchart LR
-    Client[Client<br/>Mobile/Web App] -->|HTTPS<br/>TLS 1.2+| LB[Load Balancer<br/>TLS Termination]
-    LB -->|HTTP<br/>Internal Network| API[CardService API]
+    LB -->|HTTPS re-encrypt<br/>or mTLS| API[CardService API]
     API -->|HTTPS<br/>TLS 1.2+| Treasury[Treasury API]
     
     style Client fill:#87CEEB
@@ -227,10 +228,15 @@ flowchart LR
     style Treasury fill:#D3D3D3
 ```
 
-**Configuration:**
-- **Client → Load Balancer**: TLS 1.2 or 1.3 (TLS 1.0/1.1 disabled)
-- **CardService → Treasury**: HTTPS enforced (certificates validated)
-- **Internal Communication**: Plain HTTP acceptable if on trusted network; otherwise TLS
+**Configuration (Default - TLS End-to-End):**
+- **Client → Edge**: TLS 1.2 or 1.3 (TLS 1.0/1.1 disabled)
+- **Edge → Application**: HTTPS re-encrypt OR mTLS (mutual TLS)
+  - **No plaintext HTTP between edge and application**
+  - If TLS terminates at edge without re-encryption, this is a **security exception** requiring:
+    1. Private network isolation (no untrusted hosts on internal network)
+    2. Network-level security controls (firewall rules, VPC/VNET isolation)
+    3. Explicit risk acceptance documented
+- **CardService → Treasury**: HTTPS enforced (certificates validated against trusted CAs)
 
 ### Certificate Validation
 
@@ -244,6 +250,25 @@ services.AddHttpClient<ITreasuryFxRateProvider, TreasuryFxRateProvider>()
         // PROD: Use default validation (validates against trusted CAs)
     });
 ```
+
+## Production Configuration Enforcement
+
+### Required Configuration Keys
+
+The following configuration keys MUST be set in Production environments. Missing or blank values will cause application startup failure (fail-fast):
+
+| Configuration Key | Purpose | Validation | Example |
+|-------------------|---------|------------|----------|
+| `CARD__HashSalt` | Salt for SHA-256 card number hashing | Required in Production; non-empty string | `<64-char random hex string>` |
+| `DB__ConnectionString` | SQLite database file path | Optional (defaults to `Data Source=App_Data/app.db`) | `Data Source=/app/data/cardservice.db` |
+| `FX__BaseUrl` | Treasury API base URL | Optional (defaults to Treasury production URL) | `https://api.fiscaldata.treasury.gov/services/api/fiscal_service/` |
+| `FX__TimeoutSeconds` | HTTP request timeout | Optional (defaults to 2 seconds) | `2` |
+| `FX__RetryCount` | Number of retry attempts | Optional (defaults to 2) | `2` |
+| `FX__CircuitBreakerFailures` | Failures before circuit opens | Optional (defaults to 5) | `5` |
+
+**Implementation:** See [DependencyInjection.cs](../../src/CardService.Infrastructure/DependencyInjection.cs) for enforcement logic.
+
+**Dev-only fallback:** In non-Production environments, `CARD__HashSalt` uses a default value `"dev-only-salt-not-for-production"` for developer convenience. This fallback is NEVER used in Production.
 
 ## Data at Rest Security
 
