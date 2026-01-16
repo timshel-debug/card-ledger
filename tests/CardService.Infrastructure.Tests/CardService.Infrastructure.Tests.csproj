@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CardService.Infrastructure\CardService.Infrastructure.csproj" />
+    <ProjectReference Include="..\CardService.Tests.Common\CardService.Tests.Common.csproj" />
   </ItemGroup>
 
 </Project>

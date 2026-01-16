@@ -2,6 +2,7 @@ using CardService.Application.Common;
 using CardService.Application.Ports;
 using CardService.Domain.ValueObjects;
 using CardService.Infrastructure.Persistence;
+using CardService.Tests.Common.TestHelpers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -47,7 +48,8 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
             config.AddInMemoryCollection(new Dictionary<string, string>
             {
                 ["DB:AutoMigrate"] = "false",
-                ["CARD:HashSalt"] = "test-salt"
+                ["CARD:HashSalt"] = "test-salt-for-integration-tests",
+                ["CARD__HashSalt"] = "test-salt-for-integration-tests"
             });
         });
 
@@ -86,24 +88,6 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
             _connection?.Dispose();
         }
         base.Dispose(disposing);
-    }
-}
-
-public class FixedClock : IClock
-{
-    private DateTime _fixedTime;
-
-    public FixedClock(DateTime fixedTime)
-    {
-        _fixedTime = fixedTime;
-    }
-
-    public DateTime UtcNow => _fixedTime;
-    public DateOnly UtcToday => DateOnly.FromDateTime(_fixedTime);
-
-    public void SetTime(DateTime time)
-    {
-        _fixedTime = time;
     }
 }
 

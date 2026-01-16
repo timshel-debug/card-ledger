@@ -30,6 +30,10 @@ graph TB
 **Configuration:**
 - `DB__ConnectionString`: `Data Source=app.db`
 - `FX__BaseUrl`: `https://api.fiscaldata.treasury.gov`
+- `FX__TimeoutSeconds`: 2 (per-request timeout)
+- `FX__RetryCount`: 2 (exponential backoff)
+- `FX__CircuitBreakerFailures`: 5 (failures before break)
+- `FX__CircuitBreakerDurationSeconds`: 30 (recovery wait)
 - `CARD__HashSalt`: (optional in dev, required in prod)
 
 ### Containerized Deployment
@@ -51,7 +55,7 @@ graph TB
     client["Client Apps"] -->|HTTPS<br/>Port 443| api
     api -->|HTTPS| treasury
     
-    env["Environment Variables<br/>- DB__ConnectionString<br/>- FX__BaseUrl<br/>- FX__TimeoutSeconds<br/>- FX__RetryCount<br/>- CARD__HashSalt"] -.->|Config| api
+    env["Environment Variables<br/>- DB__ConnectionString<br/>- FX__BaseUrl<br/>- FX__TimeoutSeconds<br/>- FX__RetryCount<br/>- FX__CircuitBreakerFailures<br/>- FX__CircuitBreakerDurationSeconds<br/>- CARD__HashSalt"] -.->|Config| api
     
     style api fill:#5394fd
     style volume fill:#777
@@ -68,6 +72,7 @@ graph TB
   - `FX__TimeoutSeconds=2`
   - `FX__RetryCount=2`
   - `FX__CircuitBreakerFailures=5`
+  - `FX__CircuitBreakerDurationSeconds=30`
   - `CARD__HashSalt=<secure-random-value>`
 
 ## Configuration Sources

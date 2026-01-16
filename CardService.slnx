@@ -9,5 +9,6 @@
     <Project Path="tests/CardService.Api.Tests/CardService.Api.Tests.csproj" />
     <Project Path="tests/CardService.Domain.Tests/CardService.Domain.Tests.csproj" />
     <Project Path="tests/CardService.Infrastructure.Tests/CardService.Infrastructure.Tests.csproj" />
+    <Project Path="tests/CardService.Tests.Common/CardService.Tests.Common.csproj" />
   </Folder>
 </Solution>

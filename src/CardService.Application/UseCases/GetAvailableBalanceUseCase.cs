@@ -33,7 +33,7 @@ public class GetAvailableBalanceUseCase
 {
     private readonly ICardRepository _cardRepository;
     private readonly IPurchaseRepository _purchaseRepository;
-    private readonly FxRateResolver _fxRateResolver;
+    private readonly IFxRateResolver _fxRateResolver;
     private readonly IClock _clock;
 
     /// <summary>
@@ -46,7 +46,7 @@ public class GetAvailableBalanceUseCase
     public GetAvailableBalanceUseCase(
         ICardRepository cardRepository, 
         IPurchaseRepository purchaseRepository,
-        FxRateResolver fxRateResolver, 
+        IFxRateResolver fxRateResolver, 
         IClock clock)
     {
         _cardRepository = cardRepository;

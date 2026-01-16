@@ -31,14 +31,14 @@ namespace CardService.Application.UseCases;
 public class GetPurchaseConvertedUseCase
 {
     private readonly IPurchaseRepository _purchaseRepository;
-    private readonly FxRateResolver _fxRateResolver;
+    private readonly IFxRateResolver _fxRateResolver;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GetPurchaseConvertedUseCase"/> class.
     /// </summary>
     /// <param name="purchaseRepository">Repository for querying purchase transactions.</param>
     /// <param name="fxRateResolver">Service for resolving exchange rates with cache-first strategy and upstream fallback.</param>
-    public GetPurchaseConvertedUseCase(IPurchaseRepository purchaseRepository, FxRateResolver fxRateResolver)
+    public GetPurchaseConvertedUseCase(IPurchaseRepository purchaseRepository, IFxRateResolver fxRateResolver)
     {
         _purchaseRepository = purchaseRepository;
         _fxRateResolver = fxRateResolver;

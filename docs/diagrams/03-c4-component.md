@@ -24,6 +24,7 @@ flowchart TB
         createPurchaseUseCase["CreatePurchaseUseCase<br/>Validates, ensures card exists, persists"]
         getPurchaseConvertedUseCase["GetPurchaseConvertedUseCase<br/>Retrieves purchase, converts to currency"]
         getBalanceUseCase["GetAvailableBalanceUseCase<br/>Computes balance, optionally converts"]
+        fxResolverInterface["IFxRateResolver<br/>(Port interface)<br/>Abstraction for FX resolution"]
         fxResolver["FxRateResolver<br/>(Service)<br/>Resolves FX rate with cache/fallback"]
         cardRepo["ICardRepository<br/>(Port interface)"]
         purchaseRepo["IPurchaseRepository<br/>(Port interface)"]
@@ -35,7 +36,7 @@ flowchart TB
         cardRepoImpl["CardRepository<br/>(EF Core)"]
         purchaseRepoImpl["PurchaseRepository<br/>(EF Core)"]
         fxCacheImpl["FxRateCacheRepository<br/>(EF Core)"]
-        treasuryClient["TreasuryFxRateProvider<br/>(HTTP client with Polly)"]
+        treasuryClient["TreasuryFxRateProvider<br/>(HTTP client with Polly)<br/>Retry, Timeout, Circuit Breaker"]
         dbContext["AppDbContext<br/>(EF Core DbContext)"]
     end
 
@@ -50,11 +51,12 @@ flowchart TB
     createPurchaseUseCase --> cardRepo
     createPurchaseUseCase --> purchaseRepo
     getPurchaseConvertedUseCase --> purchaseRepo
-    getPurchaseConvertedUseCase --> fxResolver
+    getPurchaseConvertedUseCase --> fxResolverInterface
     getBalanceUseCase --> cardRepo
     getBalanceUseCase --> purchaseRepo
-    getBalanceUseCase --> fxResolver
+    getBalanceUseCase --> fxResolverInterface
     
+    fxResolverInterface -.->|implements| fxResolver
     fxResolver --> fxCache
     fxResolver --> fxProvider
     

@@ -47,7 +47,7 @@ builder.Services.AddSwaggerGen();
 /// - Polly resilience policies (timeout, retry, circuit breaker) for HTTP calls
 /// - FX rate cache and FxRateResolver service
 /// </summary>
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
 // Add Use Cases
 /// <summary>
@@ -99,10 +99,11 @@ if (autoMigrate)
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 /// <summary>
-/// Swagger UI is enabled in development to provide interactive API documentation.
-/// In production, remove these lines to avoid exposing the API schema.
+/// Swagger UI is enabled in development/staging or when OpenApi:Enabled is set to true.
+/// Configurable via OpenApi:Enabled configuration key (default: true in Development).
 /// </summary>
-if (app.Environment.IsDevelopment())
+var openApiEnabled = builder.Configuration.GetValue("OpenApi:Enabled", app.Environment.IsDevelopment());
+if (openApiEnabled)
 {
     app.UseSwagger();
     app.UseSwaggerUI();

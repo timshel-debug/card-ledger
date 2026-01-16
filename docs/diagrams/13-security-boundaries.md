@@ -71,9 +71,13 @@ flowchart TB
 
 | Secret | Storage | Access Control |
 |---|---|---|
-| **CARD__HashSalt** | Environment variable / Key Vault | Required in production; runtime only |
+| **CARD__HashSalt** | Environment variable / Key Vault | **Required in production** (throws startup exception if missing); dev uses safe default |
 | **DB__ConnectionString** | Environment variable | May contain file path or credentials |
 | **FX__BaseUrl** | Configuration | Public URL (no secret) |
+| **FX__TimeoutSeconds** | Configuration | 2 seconds (per-request) |
+| **FX__RetryCount** | Configuration | 2 attempts with exponential backoff |
+| **FX__CircuitBreakerFailures** | Configuration | 5 consecutive failures before opening circuit |
+| **FX__CircuitBreakerDurationSeconds** | Configuration | 30 seconds break period for circuit recovery |
 
 ## Card Number Hashing
 
@@ -95,8 +99,10 @@ public static class CardNumberHasher
 ### Properties
 
 - **Algorithm**: SHA-256 (collision-resistant)
-- **Salt**: Configured via `CARD__HashSalt` environment variable (required in production)
-- **Output**: 64-character hexadecimal string
+- **Salt**: Configured via `CARD__HashSalt` environment variable
+  - **Production**: REQUIRED at startup (throws `InvalidOperationException` if missing)
+  - **Development**: Uses safe default `"dev-only-salt-not-for-production"` if not configured
+- **Output**: 64-character uppercase hexadecimal string
 - **Uniqueness Enforcement**: Database `UNIQUE` constraint on `card_number_hash`
 
 ### Attack Resistance

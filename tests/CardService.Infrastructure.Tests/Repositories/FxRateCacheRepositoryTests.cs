@@ -2,18 +2,13 @@ using CardService.Application.Common;
 using CardService.Domain.Entities;
 using CardService.Infrastructure.Repositories;
 using CardService.Infrastructure.Tests.TestHelpers;
+using CardService.Tests.Common.TestHelpers;
 using AwesomeAssertions;
 
 namespace CardService.Infrastructure.Tests.Repositories;
 
 public class FxRateCacheRepositoryTests
 {
-    private class FixedClock : IClock
-    {
-        public DateTime UtcNow { get; }
-        public DateOnly UtcToday => DateOnly.FromDateTime(UtcNow);
-        public FixedClock(DateTime utcNow) => UtcNow = utcNow;
-    }
 
     [Fact]
     public async Task GetLatestRateAsync_ReturnsLatestRecordDateWithinWindow()

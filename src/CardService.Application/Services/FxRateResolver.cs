@@ -27,7 +27,7 @@ namespace CardService.Application.Services;
 /// simplifying the use cases that depend on exchange rate resolution.
 /// </para>
 /// </remarks>
-public class FxRateResolver
+public class FxRateResolver : IFxRateResolver
 {
     private readonly IFxRateCache _cache;
     private readonly ITreasuryFxRateProvider _provider;
