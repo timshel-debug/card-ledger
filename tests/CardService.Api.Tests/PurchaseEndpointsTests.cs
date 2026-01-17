@@ -179,4 +179,47 @@ public class PurchaseEndpointsTests : IntegrationTestBase
             new CreatePurchaseRequest("Test Purchase", date, amount));
         return (await response.Content.ReadFromJsonAsync<CreatePurchaseResponse>())!;
     }
+
+    [Fact]
+    public async Task GetBalance_WhenPurchasesExceedCreditLimit_ShouldReturnNegativeBalance()
+    {
+        // Arrange
+        var card = await CreateTestCard(100.00m);
+        await CreateTestPurchase(card.CardId, 150.00m, new DateOnly(2024, 12, 20));
+
+        // Act
+        var response = await Client.GetAsync($"/cards/{card.CardId}/balance");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<BalanceResponse>();
+        result.Should().NotBeNull();
+        result!.CreditLimitUsd.Should().Be(100.00m);
+        result.TotalPurchasesUsd.Should().Be(150.00m);
+        result.AvailableBalanceUsd.Should().Be(-50.00m); // 100 - 150 = -50
+    }
+
+    [Fact]
+    public async Task GetBalance_WhenPurchasesExceedCreditLimit_WithConversion_ShouldReturnNegativeConvertedBalance()
+    {
+        // Arrange
+        Factory.FakeTreasuryProvider.Clear();
+        Factory.FakeTreasuryProvider.AddRate("Test-Currency", new DateOnly(2024, 12, 31), 2.0m);
+
+        var card = await CreateTestCard(100.00m);
+        await CreateTestPurchase(card.CardId, 150.00m, new DateOnly(2024, 12, 20));
+
+        // Act
+        var response = await Client.GetAsync(
+            $"/cards/{card.CardId}/balance?currencyKey=Test-Currency");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<BalanceResponse>();
+        result.Should().NotBeNull();
+        result!.CreditLimitUsd.Should().Be(100.00m);
+        result.TotalPurchasesUsd.Should().Be(150.00m);
+        result.AvailableBalanceUsd.Should().Be(-50.00m);
+        result.ConvertedAvailableBalance.Should().Be(-100.00m); // -50 * 2.0 = -100
+    }
 }

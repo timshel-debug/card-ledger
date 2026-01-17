@@ -416,3 +416,10 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# development test files
+*.diff
+*.zip
+reports/
+
+**/App_Data/

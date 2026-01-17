@@ -1,7 +1,7 @@
 # GitHub Copilot Instructions — Card Service (WEX Implementation)
 
 ## Project Overview
-This is a **production-ready card and purchase transaction service** with foreign exchange conversion using the U.S. Treasury Reporting Rates of Exchange API. The implementation must meet specific requirements (see [requirements.md](../requirements.md)) including zero external database installation and automated functional testing.
+Production-ready card and purchase transaction service with foreign exchange conversion using the U.S. Treasury Reporting Rates of Exchange API. SQLite-based, zero external database installation, fully tested.
 
 ## Architecture — Clean/Hexagonal
 The codebase follows **Clean Architecture** (hexagonal) with strict dependency inversion:
@@ -13,24 +13,38 @@ Domain ← Application ← Infrastructure
 ```
 
 **Layer responsibilities:**
-- **Domain**: Aggregates (`Card`), entities (`PurchaseTransaction`), value objects (`Money`, `CardNumber`, `FxRate`). Zero framework dependencies.
-- **Application**: Use cases (`CreateCard`, `CreatePurchase`, `GetPurchaseConverted`, `GetAvailableBalance`), ports (interfaces), DTO mapping.
-- **Infrastructure**: EF Core repositories, SQLite persistence, Treasury API client, FX rate caching, resilience policies (Polly).
-- **API**: ASP.NET Core Minimal API endpoints, request validation, Problem Details error mapping, health checks.
+- **Domain** (`CardService.Domain`): Aggregates (`Card`), entities (`PurchaseTransaction`), value objects (`Money`, `CardNumber`, `FxRate`). Zero framework dependencies.
+- **Application** (`CardService.Application`): Use cases (`CreateCardUseCase`, `CreatePurchaseUseCase`, `GetPurchaseConvertedUseCase`, `GetAvailableBalanceUseCase`), ports (interfaces), DTO mapping, validation exceptions.
+- **Infrastructure** (`CardService.Infrastructure`): EF Core repositories, SQLite persistence, Treasury API client (`TreasuryFxRateProvider`), FX rate caching, resilience policies (Polly), `DependencyInjection.cs` extension method.
+- **API** (`CardService.Api`): ASP.NET Core Minimal API endpoints (`CardEndpoints`, `PurchaseEndpoints`), `ExceptionHandlingMiddleware`, Problem Details error mapping, health checks, Swagger.
 
-**Critical**: High-level policies (use cases) depend on abstractions only. Infrastructure details are injected via DI.
+**Critical dependency rules**: 
+- Use cases take repositories/services via constructor injection (ports defined in Application layer)
+- Infrastructure implements ports (e.g., `ICardRepository`, `ITreasuryFxRateProvider`, `IClock`)
+- Domain layer NEVER references EF Core, ASP.NET, or any framework types
+- All DI registration happens in `Infrastructure/DependencyInjection.cs::AddInfrastructure()` and `Program.cs`
 
 ## Data Model & Storage
-**SQLite file-based** (satisfies "no external DB" requirement). See [04-data-model.md](../solution-design-bundle/docs/04-data-model.md).
+**SQLite file-based** (satisfies "no external DB" requirement). EF Core with code-first migrations.
 
-### Key tables
-- `cards`: `id` (GUID), `card_number_hash` (SHA-256, UNIQUE), `last4`, `credit_limit_cents` (INTEGER)
-- `purchases`: `id` (GUID), `card_id` (FK), `description` (max 50 chars), `transaction_date` (ISO date), `amount_cents` (INTEGER)
-- `fx_rate_cache`: composite PK `(currency_key, record_date)`, `exchange_rate`, `cached_utc`
+### Key tables & mapping patterns
+- **`cards`**: `id` (GUID), `card_number_hash` (SHA-256, UNIQUE index), `last4`, `credit_limit_cents` (INTEGER), `created_utc`
+- **`purchases`**: `id` (GUID), `card_id` (FK to cards), `description` (max 50 chars), `transaction_date` (ISO date), `amount_cents` (INTEGER)
+- **`fx_rate_cache`**: composite PK `(currency_key, record_date)`, `exchange_rate` (decimal), `cached_utc`
 
-**Money handling**: Store USD as **integer cents** to avoid floating-point errors. Convert using decimal arithmetic: `convertedAmount = Round(usdDecimal * rate, 2, MidpointRounding.AwayFromZero)`.
+**EF Core configuration pattern**: Use `IEntityTypeConfiguration<T>` in `Infrastructure/Persistence/Configurations/` (e.g., `CardConfiguration.cs`) to keep mapping separate from entities. Convention: snake_case column names (`card_number_hash`), table names lowercase.
 
-**Security**: Card numbers MUST be stored as `SHA-256(cardNumber)` + `last4` only. Never persist plaintext card numbers.
+**Money handling**: 
+- Store USD as **integer cents** (`long`) to avoid floating-point errors
+- `Money.FromUsd(decimal)` converts dollars → cents (rounded)
+- `Money.ToDecimal()` converts cents → dollars for display
+- FX conversion: `convertedAmount = Round(usdDecimal * rate, 2, MidpointRounding.AwayFromZero)`
+- **Never** use `float` or `double` for money
+
+**Security**: 
+- Card numbers MUST be stored as `SHA-256(cardNumber)` + `last4` only via `ICardNumberHasher` (production requires `CARD__HashSalt` config)
+- Never log plaintext card numbers
+- Repository checks uniqueness via `CardNumberHash` index
 
 ## Currency Conversion Rules (Critical Business Logic)
 See [requirements.md](../requirements.md#requirement-3) and [01-solution-design.md](../solution-design-bundle/docs/01-solution-design.md).
@@ -71,37 +85,88 @@ See [03-api-contract-openapi.yaml](../solution-design-bundle/docs/03-api-contrac
 
 ### Build & Test
 ```powershell
+# Full solution build (uses Central Package Management)
 dotnet restore
 dotnet build
+
+# Run all tests (unit + integration)
 dotnet test
+
+# Run specific test project
+dotnet test tests/CardService.Api.Tests
 ```
 
 ### Run locally
 ```powershell
-dotnet run --project <API-project-path>
-# SQLite DB auto-created at app startup with migrations applied
-# Default: http://localhost:5000
+# Run API (auto-migrates DB by default in non-Production environments)
+dotnet run --project src/CardService.Api
+
+# Swagger available at: http://localhost:5000/swagger (if OpenApi__Enabled=true)
+# Health checks: /health/live, /health/ready
+```
+
+**Key environment variables** (PowerShell):
+```powershell
+$Env:ASPNETCORE_ENVIRONMENT = "Development"
+$Env:CARD__HashSalt = "dev-only-salt"              # Required in production
+$Env:DB__ConnectionString = "Data Source=App_Data/app.db"
+$Env:OpenApi__Enabled = "true"
+# Note: DB__AutoMigrate defaults to true in non-Production; set to "false" to disable
 ```
 
 ### Migrations
-Use EF Core migrations:
+EF Core migrations (uses `AppDbContextFactory` for design-time tooling):
 ```powershell
-dotnet ef migrations add <MigrationName> --project <Infrastructure-project>
-dotnet ef database update --project <API-project>
+# Add new migration
+dotnet ef migrations add <MigrationName> --project src/CardService.Infrastructure --startup-project src/CardService.Api
+
+# Apply migrations manually
+dotnet ef database update --project src/CardService.Infrastructure --startup-project src/CardService.Api
+
+# Generate SQL script
+dotnet ef migrations script --project src/CardService.Infrastructure --startup-project src/CardService.Api
 ```
-Migrations auto-apply in dev; run explicitly in CI/CD for prod.
+
+**Migration best practices**:
+- Auto-migrate is ON by default in Development, TestNet, and Staging; no configuration needed
+- In Production, auto-migrate is OFF by default; migrations must be applied explicitly via CI/CD pipeline
+- To disable auto-migrate in non-Production: set `DB__AutoMigrate=false`
+- Always test migrations with seed data before deployment
 
 ## Testing Strategy
-See [05-testing-validation.md](../solution-design-bundle/docs/05-testing-validation.md).
+See [05-testing-validation.md](solution-design/docs/05-testing-validation.md).
 
-**Unit tests** (fast):
+**Unit tests** (`CardService.Domain.Tests`, fast):
 - Domain: `CardNumber` 16-digit validation, `Description` ≤50 chars, money rounding, FX window logic
 - FX: "latest rate ≤ date" selection, 6-month window calculation, conversion rounding
+- Run with: `dotnet test tests/CardService.Domain.Tests`
 
-**Integration tests** (medium):
-- Use `WebApplicationFactory` + in-memory/temp SQLite
+**Integration tests** (`CardService.Api.Tests`, medium):
+- Use `TestWebApplicationFactory` + shared in-memory SQLite (`Data Source=:memory:;Cache=Shared`)
+- `FakeTreasuryFxRateProvider` for deterministic FX data (no HTTP calls)
+- `FixedClock` (default: 2024-12-31 12:00 UTC) for time-dependent tests
+- Database cleared between tests via `ClearDatabase()` helper
 - Test persistence constraints (card number uniqueness → 409, FK integrity)
-- End-to-end API flows with mocked Treasury HTTP client
+- End-to-end API flows (POST card → POST purchase → GET converted)
+
+**Test base class pattern** (see `IntegrationTestBase.cs`):
+```csharp
+public class MyIntegrationTests : IntegrationTestBase
+{
+    [Fact]
+    public async Task Test_Scenario()
+    {
+        // Arrange: seed data, configure FakeTreasuryProvider
+        Factory.FakeTreasuryProvider.AddRate(currencyKey, recordDate, rate);
+        
+        // Act: call API via HttpClient
+        var response = await Client.PostAsJsonAsync("/cards", request);
+        
+        // Assert: status code + response DTO
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+}
+```
 
 **Key acceptance criteria**:
 - **AC-03**: Conversion returns correct rate (≤ purchase date, within 6 months, rounded to 2 decimals)
@@ -132,6 +197,10 @@ Environment variables (see [06-deployment-rollback.md](../solution-design-bundle
 - **Value objects**: `Money` encapsulates amount + currency, enforces rounding rules
 - **Repository pattern**: Infrastructure implements `ICardRepository`, `IPurchaseRepository`, `IFxRateCache` ports
 - **Use case orchestration**: Application layer coordinates domain + infrastructure via injected ports
+- **Minimal API endpoints**: Static classes in `Api/Endpoints/` use extension methods (`MapCardEndpoints()`, `MapPurchaseEndpoints()`)
+- **DI registration**: `AddInfrastructure(config, env)` in `Infrastructure/DependencyInjection.cs` centralizes all infrastructure setup
+- **EF Core configs**: Separate `IEntityTypeConfiguration<T>` classes in `Persistence/Configurations/` (not in DbContext)
+- **Central Package Management**: `Directory.Packages.props` defines all package versions (no versions in .csproj files)
 
 ## Common Pitfalls to Avoid
 1. **Do NOT** use floating-point for money — always integer cents in storage, decimal in application layer
@@ -139,6 +208,17 @@ Environment variables (see [06-deployment-rollback.md](../solution-design-bundle
 3. **FX window**: Must enforce both `<=` date AND 6-month window; missing either causes incorrect behavior
 4. **Rounding**: Use `MidpointRounding.AwayFromZero` for currency conversion (not banker's rounding)
 5. **Error responses**: Always use Problem Details with `code` field for client-side error handling
+6. **Configuration keys**: Support both `__` (double underscore) and `:` (colon) separators for env vars (e.g., `CARD__HashSalt` or `CARD:HashSalt`)
+7. **Test isolation**: Call `Factory.ClearDatabase()` between integration tests to avoid data pollution
+8. **EF Core migrations**: Always specify both `--project` (Infrastructure) and `--startup-project` (Api) for design-time tooling
+
+## Codebase Conventions
+- **Naming**: snake_case for DB columns/tables, PascalCase for C# types/properties
+- **Project references**: Domain → nothing; Application → Domain; Infrastructure → Application + Domain; Api → all layers
+- **Async all the way**: All use case methods return `Task<T>`, repositories use `CancellationToken`
+- **DTO mapping**: Manual mapping in use cases (no AutoMapper), DTOs live in `Application/DTOs/`
+- **Exception handling**: Throw domain exceptions (e.g., `ValidationException`, `DuplicateResourceException`) from use cases; `ExceptionHandlingMiddleware` maps to HTTP status codes
+- **Assertions**: Use `Shouldly` (AwesomeAssertions) in tests: `response.StatusCode.ShouldBe(HttpStatusCode.OK)`
 
 ## Next Steps for Implementation
 The design docs are complete. Implementation priority:
@@ -148,3 +228,5 @@ The design docs are complete. Implementation priority:
 4. Treasury API client + FX cache + resilience
 5. Conversion endpoints (purchase + balance)
 6. Integration tests with `WebApplicationFactory`
+
+**Current Status**: ✅ Fully implemented and tested. All requirements met. See test reports in root directory.

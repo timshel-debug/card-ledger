@@ -121,8 +121,10 @@ public class GetAvailableBalanceUseCase
 
         var creditLimitMoney = Money.FromCents(card.CreditLimitCents, "USD");
         var totalPurchasesMoney = Money.FromCents(totalPurchasesCents, "USD");
-        var availableBalanceCents = Math.Max(0, card.CreditLimitCents - totalPurchasesCents);
-        var availableBalanceMoney = Money.FromCents(availableBalanceCents, "USD");
+        
+        // Compute available balance: credit limit - total purchases (can be negative)
+        var availableBalanceCents = card.CreditLimitCents - totalPurchasesCents;
+        var availableBalanceUsd = Math.Round(availableBalanceCents / 100m, 2, MidpointRounding.AwayFromZero);
 
         // If no conversion requested, return USD only
         if (string.IsNullOrWhiteSpace(currencyKey))
@@ -131,25 +133,25 @@ public class GetAvailableBalanceUseCase
                 card.Id,
                 creditLimitMoney.ToDecimal(),
                 totalPurchasesMoney.ToDecimal(),
-                availableBalanceMoney.ToDecimal()
+                availableBalanceUsd
             );
         }
 
-        // Conversion requested
+        // Conversion requested - compute directly from USD decimal to handle negative values
         var anchorDate = asOfDate ?? _clock.UtcToday;
         var fxRate = await _fxRateResolver.ResolveRateAsync(currencyKey, anchorDate, cancellationToken);
 
-        var convertedBalance = availableBalanceMoney.ConvertTo(currencyKey, fxRate.ExchangeRate);
+        var convertedAvailableBalance = Math.Round(availableBalanceUsd * fxRate.ExchangeRate, 2, MidpointRounding.AwayFromZero);
 
         return new BalanceResponse(
             card.Id,
             creditLimitMoney.ToDecimal(),
             totalPurchasesMoney.ToDecimal(),
-            availableBalanceMoney.ToDecimal(),
+            availableBalanceUsd,
             currencyKey,
             fxRate.ExchangeRate,
             fxRate.RecordDate,
-            convertedBalance.ToDecimal(),
+            convertedAvailableBalance,
             anchorDate
         );
     }

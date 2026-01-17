@@ -60,7 +60,7 @@ Standard ASP.NET Core configuration sources (appsettings, environment variables,
 | Key | Description | Default |
 | --- | --- | --- |
 | `DB__ConnectionString` or `DB:ConnectionString` | SQLite connection string | `Data Source=App_Data/app.db` |
-| `DB__AutoMigrate` or `DB:AutoMigrate` | Run EF migrations automatically on startup | `false` |
+| `DB__AutoMigrate` or `DB:AutoMigrate` | Run EF migrations automatically on startup | `true` in non-Production; set to `false` to disable |
 | `OpenApi__Enabled` or `OpenApi:Enabled` | Enable Swagger/OpenAPI endpoints | `true` in Development |
 
 ### FX / Treasury Resilience
@@ -88,7 +88,7 @@ Swagger (if enabled): `https://localhost:<port>/swagger`
 $Env:ASPNETCORE_ENVIRONMENT = "Development"
 $Env:CARD__HashSalt = "dev-only-salt"
 $Env:OpenApi__Enabled = "true"
-$Env:DB__AutoMigrate = "true"
+# Note: DB__AutoMigrate defaults to true in non-Production environments
 ```
 
 ---
@@ -97,8 +97,9 @@ $Env:DB__AutoMigrate = "true"
 
 SQLite via EF Core.
 
-- Auto-migrate: set `DB__AutoMigrate=true` and run the API.
-- Manual: `dotnet ef database update --project src/CardService.Infrastructure --startup-project src/CardService.Api`
+- **Auto-migrate** (default in non-Production): Runs automatically in Development/TestNet/Staging unless disabled via `DB__AutoMigrate=false`.
+- **Manual migration**: `dotnet ef database update --project src/CardService.Infrastructure --startup-project src/CardService.Api`
+- **Disable auto-migrate**: Set `DB__AutoMigrate=false` in any environment.
 
 ---
 

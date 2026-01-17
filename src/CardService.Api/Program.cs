@@ -76,14 +76,18 @@ builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
-// Apply migrations on startup if explicitly enabled via configuration
+// Bootstrap SQLite - ensure directory exists for file-based databases
+var connectionString = builder.Configuration.GetValue<string>("DB:ConnectionString")
+    ?? "Data Source=App_Data/app.db";
+SqliteBootstrapper.EnsureDirectoryExists(connectionString, app.Environment.ContentRootPath);
+
+// Apply migrations on startup - defaults to true in non-Production environments, opt-in for Production
 /// <summary>
-/// EF Core migrations are applied automatically if DB:AutoMigrate is set to true
-/// in appsettings.json or configuration. In development, this is enabled by default
-/// for convenient setup. In production, migrations should be applied explicitly
-/// during the deployment pipeline.
+/// EF Core migrations are applied automatically in non-Production environments (Development,
+/// TestNet, Staging, etc.) unless explicitly disabled. In Production, migrations should be
+/// applied explicitly during the deployment pipeline (opt-in via configuration).
 /// </summary>
-var autoMigrate = builder.Configuration.GetValue<bool>("DB:AutoMigrate", false);
+var autoMigrate = builder.Configuration.GetValue<bool?>("DB:AutoMigrate") ?? !app.Environment.IsProduction();
 if (autoMigrate)
 {
     using var scope = app.Services.CreateScope();

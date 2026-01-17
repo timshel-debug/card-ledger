@@ -19,7 +19,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         // Database
-        var connectionString = configuration.GetValue<string>("DB__ConnectionString") ?? "Data Source=App_Data/app.db";
+        var connectionString = configuration.GetValue<string>("DB:ConnectionString") ?? "Data Source=App_Data/app.db";
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlite(connectionString));
 
